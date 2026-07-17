@@ -47,31 +47,29 @@ For large-scale datasets, deterministic SVD is computationally prohibitive. Rand
 ## 3. Theoretical Questions & Answers
 
 ### Q1: Term Frequency (TF) & Inverse Document Frequency (IDF)
-- **Term Frequency (TF)** measures how frequently a term $t$ occurs in a document $d$:
-  $$TF(t, d) = \frac{f_{t,d}}{\sum_{t' \in d} f_{t',d}}$$
-- **Inverse Document Frequency (IDF)** measures a term's significance across the entire corpus $D$:
+- **Term Frequency (TF)** measures how often a word shows up in a single document compared to the total words in it:
+  $$TF(t, d) = \frac{\text{count}(t, d)}{\sum_{t' \in d} \text{count}(t', d)}$$
+- **Inverse Document Frequency (IDF)** measures how common or rare a word is across all the documents in our dataset:
   $$IDF(t, D) = \log \frac{|D|}{|\{d \in D : t \in d\}|}$$
 
 **Why independent study is misleading:**
-- **TF alone:** Overemphasizes common structural words (e.g., "the", "is", "of") that appear frequently in almost all documents but carry no topic-specific semantic meaning.
+- **TF alone:** Overemphasizes common structural words (like "the", "is", "of", "and") that appear frequently in almost all documents but don't carry any topic-specific semantic meaning.
 - **IDF alone:** Overemphasizes extremely rare words, typographical errors, or specialized jargon that appear in very few documents. These words receive high IDF scores but are irrelevant for general topic classification.
-- **TF-IDF Integration:** Combines both metrics to highlight words that are frequent in a specific document but relatively unique within the broader corpus, reflecting actual semantic significance.
+- **TF-IDF Integration:** We multiply them (TF-IDF = TF $\times$ IDF) to highlight words that are frequent in a specific document but relatively unique within the broader corpus, reflecting actual semantic significance.
 
 ---
 
 ### Q2: Rank Reduction Threshold & The "Elbow Point"
-To select the target dimension $k$ in Truncated SVD, we plot the singular values (or cumulative explained variance) against the number of components:
-- **Scree Plot:** A plot of the singular values $\sigma_i$.
-- **Cumulative Explained Variance Plot:** A plot of $\sum_{i=1}^k \sigma_i^2 / \sum_{j=1}^r \sigma_j^2$.
-- **The Elbow Point:** The point on the plot where the curve changes from steep to flat. This "knee" or "elbow" indicates the point of diminishing returns—adding more components beyond this point captures noise rather than significant latent concepts.
+To select the target dimension $k$ in Truncated SVD, we plot the singular values (the scree plot) or cumulative explained variance against the number of components.
+Usually, the curve starts steep because the first few components capture most of the variance, and then it flattens out. The "elbow point" is the spot where the plot bends from steep to flat. Beyond this point, adding more components gives us diminishing returns (we are just capturing noise instead of actual latent concepts). To find this point programmatically, we can draw a line from the first point to the last point on the curve, calculate the perpendicular distance from each point on the curve to that line, and pick the point with the maximum distance as the elbow.
 
 ---
 
 ### Q3: Reconstruction Error Calculation
-The reconstruction error measures the information lost when approximating $A$ with $A_k = U_k S_k V_k^T$.
+The reconstruction error shows how much information we lose when we approximate our standardized matrix $A$ with a lower-rank matrix $A_k = U_k S_k V_k^T$.
 - **Absolute Reconstruction Error:** Computed as the Frobenius norm of the difference matrix:
   $$\text{Error}_{\text{abs}} = \|A - A_k\|_F = \sqrt{\sum_{i,j} (A_{ij} - (A_k)_{ij})^2}$$
-- **Using Singular Values:** According to the Eckart-Young-Mirsky Theorem, it simplifies to:
+- **Using Singular Values:** According to the Eckart-Young-Mirsky Theorem, we don't actually need to reconstruct the matrix to find this error. It is equal to the square root of the sum of the squares of the singular values we discarded:
   $$\|A - A_k\|_F = \sqrt{\sum_{i=k+1}^{r} \sigma_i^2}$$
 - **Relative Reconstruction Error:**
   $$\text{Error}_{\text{rel}} = \frac{\|A - A_k\|_F}{\|A\|_F} = \sqrt{\frac{\sum_{i=k+1}^{r} \sigma_i^2}{\sum_{i=1}^{r} \sigma_i^2}}$$
@@ -79,16 +77,16 @@ The reconstruction error measures the information lost when approximating $A$ wi
 ---
 
 ### Q4: Cosine Similarity & Euclidean Distance
-- **Cosine Similarity:** Measures the cosine of the angle between two vectors $\mathbf{u}$ and $\mathbf{v}$:
+- **Cosine Similarity:** Measures the cosine of the angle between two vectors:
   $$\text{Cosine Similarity}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2}$$
-  - **Range:** $[-1, 1]$ (or $[0, 1]$ for non-negative spaces).
-  - **Boundary Meaning:** $1$ implies collinear vectors pointing in the same direction (identical semantic profile); $0$ implies orthogonal vectors (uncorrelated concepts); $-1$ implies opposite directions (opposing semantics).
-  - **Scale Invariance:** It measures angle rather than magnitude, which is ideal for comparing texts of different lengths.
+  - **Range:** $[-1, 1]$ (or $[0, 1]$ for non-negative spaces like word counts).
+  - **Boundary Meaning:** $1$ means they point in the exact same direction (highly related concepts), $0$ means they are orthogonal (uncorrelated), and $-1$ means they point in opposite directions.
+  - **Scale Invariance:** It only cares about the direction, so a short article and a long article on the same topic will still have high similarity.
 - **Euclidean Distance:** Measures the geometric distance between two points:
   $$d(\mathbf{u}, \mathbf{v}) = \|\mathbf{u} - \mathbf{v}\|_2 = \sqrt{\sum_i (u_i - v_i)^2}$$
   - **Range:** $[0, \infty)$.
-  - **Boundary Meaning:** $0$ implies identical vectors.
-  - **Scale Sensitivity:** Long documents containing many words will have high magnitudes and appear distant from short documents, even if they discuss the exact same topic.
+  - **Boundary Meaning:** $0$ means the vectors are identical.
+  - **Scale Sensitivity:** It is very sensitive to vector magnitude. If one document is much longer than another, their Euclidean distance will be huge, even if they discuss the same topics.
 
 ---
 
@@ -96,37 +94,30 @@ The reconstruction error measures the information lost when approximating $A$ wi
 Standardization is performed using:
 $$x'_{ij} = \frac{x_{ij} - \mu_j}{\sigma_j}$$
 **Why it is essential:**
-- Singular Value Decomposition captures directions of maximum variance.
-- Without standardization, words with naturally high occurrence frequencies (even after removing stop words) will dominate the variance. SVD would align its principal axes along these high-frequency words, ignoring semantic changes of lower-frequency, high-importance words.
-- Standardization scales all word features to zero mean and unit variance, allowing each vocabulary word to contribute equally to the concept geometry.
+SVD identifies the directions of maximum variance in our data. If we don't standardize, words that are naturally very common (like "said" or "new") will have huge raw variances simply because of their high counts. SVD would align its components along these common words instead of finding the actual hidden concepts. By standardizing, we put all words on the same scale, so SVD can find latent concepts based on how words co-occur rather than just how common they are.
 
 ---
 
 ### Q6: Randomized SVD Algorithm & Performance
-For large matrices $A \in \mathbb{R}^{m \times n}$, standard SVD takes $\mathcal{O}(mn\min(m,n))$ operations. Randomized SVD uses random projections to approximate the range of $A$, reducing complexity to $\mathcal{O}(mn\log(k) + (m+n)k^2)$, making it extremely efficient for large-scale data.
+For large matrices $A \in \mathbb{R}^{m \times n}$, computing the exact SVD is very slow and takes $\mathcal{O}(mn\min(m,n))$ time. If we have a massive text dataset, this is too slow. Randomized SVD solves this by projecting the large matrix onto a much smaller random subspace, doing the exact SVD on that small matrix, and then projecting the results back. This is way faster and only costs a tiny loss in accuracy.
 
 #### **Algorithm Pseudocode:**
-1. **Input:** Matrix $A \in \mathbb{R}^{m \times n}$, target rank $k$, power iterations $q$ (typically 2 to 5).
+1. **Input:** Matrix $A \in \mathbb{R}^{m \times n}$, target rank $k$, and power iterations $q$.
 2. Generate a random Gaussian matrix $\Omega \in \mathbb{R}^{n \times k}$.
-3. Compute the sample matrix $Y = A \Omega$.
-4. **Power Iterations:** For $i = 1$ to $q$, update:
-   $$Y = A (A^T Y)$$
-5. Orthonormalize the columns of $Y$ via QR Decomposition:
-   $$Q, R = \text{qr}(Y)$$
-6. Project $A$ onto the low-dimensional subspace:
-   $$B = Q^T A \quad (B \in \mathbb{R}^{k \times n})$$
-7. Compute the standard SVD of the smaller matrix $B$:
-   $$U_B, S, V^T = \text{svd}(B)$$
-8. Reconstruct the left singular vectors of $A$:
-   $$U = Q U_B$$
+3. Form the sample matrix $Y = A \Omega$.
+4. (Optional) Run $q$ power iterations to improve accuracy: $Y = A(A^T Y)$.
+5. Find an orthonormal basis of $Y$ using QR decomposition: $Q, R = \text{qr}(Y)$.
+6. Project $A$ onto this basis: $B = Q^T A$ (this is a small $k \times n$ matrix).
+7. Compute the standard SVD of $B$: $U_B, S, V^T = \text{svd}(B)$.
+8. Map the left singular vectors back: $U = Q U_B$.
 9. **Output:** Left singular vectors $U$, singular values $S$, right singular vectors $V^T$.
 
 ---
 
 ### Q18: Semantic Searching in Latent Space
 - **BoW Space Searching:** If a search query is "technology", its representation is a one-hot vector $[0, \dots, 1, \dots, 0]$. Computing similarity only matches documents containing the exact word "technology".
-- **Latent Space Semantic Matching:** Documents with terms like "mobile", "digital", and "phone" co-occur in the same contexts as "technology". LSA places these semantically related words near each other in the latent space. Thus, a document discussing "mobile" and "digital" will project close to the query vector "technology", returning relevant documents that do *not* contain the word "technology".
-- **Computational Cost Benefit:** Searching in BoW space requires calculating similarity in a high-dimensional, sparse space (dimension $N_v \approx 50,000$). Latent space searching operates in a dense, low-dimensional space ($k \approx 100$). Computing cosine similarity in the low-dimensional space is orders of magnitude faster and consumes significantly less memory.
+- **Latent Space Semantic Matching:** Documents with terms like "mobile" and "digital" co-occur in the same contexts as "technology". LSA places these semantically related words near each other in the latent space. Thus, a query for "technology" projected into the latent space will still match that document.
+- **Computational Cost Benefit:** Searching in BoW space requires calculating similarity in a high-dimensional, sparse space (dimension $N_v \approx 50,000$). Latent space searching operates in a dense, low-dimensional space ($k \approx 7$). Computing cosine similarity in the low-dimensional space is orders of magnitude faster and consumes significantly less memory.
 
 ---
 
